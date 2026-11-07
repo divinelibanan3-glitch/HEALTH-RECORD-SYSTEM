@@ -120,6 +120,12 @@ $("logoutBtn").addEventListener("click", async () => {
 
 
 async function renderDashboard() {
+  const recentPatientsElement = $("recentPatients");
+  const recentActivityElement = $("recentActivity");
+
+  recentPatientsElement.innerHTML = '<div class="empty-state">Loading recent patients...</div>';
+  recentActivityElement.innerHTML = '<div class="empty-state">Loading clinic activity...</div>';
+
   try {
     const response = await fetch("/api/dashboard", {
       credentials: "same-origin"
@@ -148,11 +154,12 @@ async function renderDashboard() {
     
     const recentPatients = data.recent_patients || [];
 
-    $("recentPatients").innerHTML = recentPatients.length
+    recentPatientsElement.innerHTML = recentPatients.length
       ? recentPatients.map((patient) => {
           const name = patient.full_name || "Unknown Patient";
           const studentNumber = patient.student_number || "—";
           const course = patient.course || "—";
+          const registeredDate = formatDashboardDate(patient.created_at);
 
           return `
             <div class="recent-row">
@@ -163,16 +170,43 @@ async function renderDashboard() {
                 <small>${esc(course)} · ${esc(studentNumber)}</small>
               </div>
 
-              <span class="recent-time">Recently added</span>
+              <span class="recent-time">${esc(registeredDate)}</span>
             </div>
           `;
         }).join("")
       : '<div class="empty-state">No recent patients found.</div>';
 
+    const recentVisits = data.recent_visits || [];
+
+    recentActivityElement.innerHTML = recentVisits.length
+      ? recentVisits.map((visit) => {
+          const name = visit.full_name || "Unknown Patient";
+          const studentNumber = visit.student_number || "—";
+          const checkupType = visit.checkup_type || "Unspecified checkup";
+          const assessment = visit.assessment || "No assessment";
+          const visitDate = formatDashboardDate(visit.visit_date);
+
+          return `
+            <div class="activity-row">
+              <div class="activity-icon"><i class="fa-solid fa-stethoscope"></i></div>
+
+              <div class="activity-main">
+                <b>${esc(name)}</b>
+                <small>${esc(studentNumber)} · ${esc(checkupType)}</small>
+              </div>
+
+              <span class="status-pill">${esc(assessment)}</span>
+              <span class="activity-time">${esc(visitDate)}</span>
+            </div>
+          `;
+        }).join("")
+      : '<div class="empty-state">No recent clinic activity found.</div>';
 
     console.log("Dashboard loaded:", data);
   } catch (error) {
     console.error("Dashboard error:", error);
+    recentPatientsElement.innerHTML = '<div class="empty-state">Unable to load recent patients.</div>';
+    recentActivityElement.innerHTML = '<div class="empty-state">Unable to load clinic activity.</div>';
     toast("Unable to load dashboard data.");
   }
 }
@@ -181,30 +215,209 @@ async function renderDashboard() {
 function initials(name){return name.split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase()}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function formatDate(d){if(!d)return "—";return new Date(d+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
-function renderPatients(){
-  const q=($("patientSearch").value||"").toLowerCase();
-  const rows=getPatients().filter(p=>(p.fullName+" "+p.studentNumber+" "+p.course).toLowerCase().includes(q));
-  $("patientTable").innerHTML=rows.map(p=>`<tr><td>${esc(p.fullName)}</td><td>${esc(p.studentNumber)}</td><td>${esc(p.course)}</td><td>${esc(p.yearLevel)}</td><td><button class="table-action" data-view="${p.id}">View</button></td></tr>`).join("");
-  $("emptyPatients").classList.toggle("hidden",rows.length>0);
-  document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>showProfile(b.dataset.view)));
+function formatDashboardDate(value){
+  if(!value)return "—";
+  const date=new Date(value);
+  return Number.isNaN(date.getTime())?"—":date.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
 }
-$("patientSearch").addEventListener("input",renderPatients);
-function resetPatientForm(){ $("patientForm").reset();$("patientId").value=""; }
-$("patientForm").addEventListener("submit",e=>{
-  e.preventDefault();const patients=getPatients(),id=$("patientId").value;
-  const data={id:id||"p"+Date.now(),fullName:$("fullName").value.trim(),birthdate:$("birthdate").value,sex:$("sex").value,studentNumber:$("studentNumber").value.trim(),course:$("course").value,yearLevel:$("yearLevel").value,bloodType:$("bloodType").value,allergies:$("allergies").value.trim()||"None",conditions:$("conditions").value.trim()||"None",emergencyContact:$("emergencyContact").value.trim(),contactNumber:$("contactNumber").value.trim(),createdAt:id?(patients.find(p=>p.id===id)?.createdAt||new Date().toISOString().slice(0,10)):new Date().toISOString().slice(0,10)};
-  if(patients.some(p=>p.studentNumber.toLowerCase()===data.studentNumber.toLowerCase()&&p.id!==id)){toast("Student number already exists.");return}
-  if(id) savePatients(patients.map(p=>p.id===id?data:p));else savePatients([...patients,data]);
-  resetPatientForm();toast(id?"Patient record updated.":"Patient successfully registered.");go("patients");
+let patientSearchTimer;
+let patientRequestId = 0;
+
+async function renderPatients(){
+  const requestId = ++patientRequestId;
+  const search = $("patientSearch").value.trim();
+  const patientTable = $("patientTable");
+  const emptyPatients = $("emptyPatients");
+
+  patientTable.innerHTML = '<tr><td colspan="5">Loading patient records...</td></tr>';
+  emptyPatients.classList.add("hidden");
+
+  try {
+    const params = new URLSearchParams({ search });
+    const response = await fetch(`/api/patients?${params.toString()}`, {
+      credentials: "same-origin"
+    });
+
+    if (requestId !== patientRequestId) return;
+
+    if (response.status === 401) {
+      $("app").classList.add("hidden");
+      $("loginPage").classList.remove("hidden");
+      $("loginError").textContent = "Please log in again.";
+      return;
+    }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to load patient records");
+    }
+
+    if (!Array.isArray(data.patients)) {
+      throw new Error("Invalid patient data received from the server");
+    }
+
+    const patients = data.patients;
+
+    patientTable.innerHTML = patients.map((patient) => `
+      <tr>
+        <td>${esc(patient.full_name || "Unknown Patient")}</td>
+        <td>${esc(patient.student_number || "—")}</td>
+        <td>${esc(patient.course || "—")}</td>
+        <td>${esc(patient.year_level || "—")}</td>
+        <td><button class="table-action" data-view="${esc(patient.student_number)}">View</button></td>
+      </tr>
+    `).join("");
+
+    emptyPatients.textContent = search
+      ? "No patients match your search."
+      : "No patient records found. Register a patient to get started.";
+    emptyPatients.classList.toggle("hidden", patients.length > 0);
+
+    document.querySelectorAll("#patientTable [data-view]").forEach((button) => {
+      button.addEventListener("click", () => showProfile(button.dataset.view));
+    });
+  } catch (error) {
+    if (requestId !== patientRequestId) return;
+    console.error("Patient records error:", error);
+    patientTable.innerHTML = "";
+    emptyPatients.textContent = error.message || "Unable to load patient records.";
+    emptyPatients.classList.remove("hidden");
+  }
+}
+
+$("patientSearch").addEventListener("input",()=>{
+  clearTimeout(patientSearchTimer);
+  patientSearchTimer=setTimeout(renderPatients,300);
 });
-function showProfile(id){
-  const p=getPatients().find(x=>x.id===id);if(!p)return;selectedPatientId=id;
-  $("profileName").textContent=p.fullName;$("profileNumber").textContent=p.studentNumber;$("profileCourse").textContent=p.course+" · "+p.yearLevel;
-  const fields=[["Birthdate",formatDate(p.birthdate)],["Sex",p.sex],["Blood Type",p.bloodType],["Allergies",p.allergies],["Medical Conditions",p.conditions],["Emergency Contact",p.emergencyContact||"—"],["Contact Number",p.contactNumber||"—"]];
-  $("profileInfo").innerHTML=fields.map(([k,v])=>`<div class="info-item"><span>${k}</span><b>${esc(v)}</b></div>`).join("");
-  const visits=getVisits().filter(v=>v.patientId===id).sort((a,b)=>b.date.localeCompare(a.date));
-  $("profileVisits").innerHTML=visits.map(v=>`<tr><td>${formatDate(v.date)}</td><td>${esc(v.complaint)}</td><td>${esc(v.assessment)}</td><td>${esc(v.treatment)}</td></tr>`).join("")||'<tr><td colspan="4">No visits recorded.</td></tr>';
+function resetPatientForm(){ $("patientForm").reset();$("patientId").value=""; }
+$("patientForm").addEventListener("submit",async(e)=>{
+  e.preventDefault();
+
+  const form=$("patientForm");
+  const submitButton=form.querySelector('button[type="submit"]');
+  const studentNumber=$("studentNumber").value.trim();
+
+  if(!/^\d{8}$/.test(studentNumber)){
+    toast("Student number must be exactly 8 digits.");
+    $("studentNumber").focus();
+    return;
+  }
+
+  const patient={
+    student_number:studentNumber,
+    full_name:$("fullName").value.trim(),
+    birthdate:$("birthdate").value,
+    sex:$("sex").value,
+    course:$("course").value,
+    year_level:$("yearLevel").value,
+    blood_type:$("bloodType").value,
+    allergies:$("allergies").value.trim(),
+    medical_conditions:$("conditions").value.trim(),
+    emergency_contact:$("emergencyContact").value.trim(),
+    contact_number:$("contactNumber").value.trim()
+  };
+
+  submitButton.disabled=true;
+  submitButton.textContent="Saving...";
+
+  try{
+    const response=await fetch("/api/patients",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      credentials:"same-origin",
+      body:JSON.stringify(patient)
+    });
+
+    if(response.status===401){
+      $("app").classList.add("hidden");
+      $("loginPage").classList.remove("hidden");
+      $("loginError").textContent="Please log in again.";
+      return;
+    }
+
+    const data=await response.json();
+
+    if(!response.ok){
+      if(response.status===409){
+        throw new Error("That student number is already registered.");
+      }
+      throw new Error(data.message||"Unable to register patient.");
+    }
+
+    resetPatientForm();
+    $("patientSearch").value="";
+    await renderDashboard();
+    go("patients");
+    toast("Patient successfully registered.");
+  }catch(error){
+    console.error("Patient registration error:",error);
+    toast(error.message||"Unable to register patient.");
+  }finally{
+    submitButton.disabled=false;
+    submitButton.textContent="Save Record";
+  }
+});
+async function showProfile(studentNumber){
+  if(!/^\d{8}$/.test(studentNumber)){
+    toast("Student number must be exactly 8 numeric digits.");
+    return;
+  }
+
+  selectedPatientId=studentNumber;
   go("profile");
+  $("profileName").textContent="Loading patient...";
+  $("profileNumber").textContent=studentNumber;
+  $("profileCourse").textContent="—";
+  $("profileInfo").innerHTML='<div class="empty-state">Loading profile...</div>';
+  $("profileVisits").innerHTML='<tr><td colspan="4">Loading visit history...</td></tr>';
+
+  try{
+    const encodedStudentNumber=encodeURIComponent(studentNumber);
+    const [profileResponse,visitsResponse]=await Promise.all([
+      fetch(`/api/patients/${encodedStudentNumber}`,{credentials:"same-origin"}),
+      fetch(`/api/patients/${encodedStudentNumber}/visits`,{credentials:"same-origin"})
+    ]);
+
+    if(profileResponse.status===401||visitsResponse.status===401){
+      $("app").classList.add("hidden");
+      $("loginPage").classList.remove("hidden");
+      $("loginError").textContent="Please log in again.";
+      return;
+    }
+
+    const profileData=await profileResponse.json();
+    const visitsData=await visitsResponse.json();
+
+    if(!profileResponse.ok)throw new Error(profileData.message||"Failed to load patient profile");
+    if(!visitsResponse.ok)throw new Error(visitsData.message||"Failed to load visit history");
+
+    const patient=profileData.patient;
+    $("profileName").textContent=patient.full_name||"Unknown Patient";
+    $("profileNumber").textContent=patient.student_number||"—";
+    $("profileCourse").textContent=`${patient.course||"—"} · ${patient.year_level||"—"}`;
+
+    const fields=[
+      ["Birthdate",formatDashboardDate(patient.birthdate)],
+      ["Sex",patient.sex||"—"],
+      ["Blood Type",patient.blood_type||"—"],
+      ["Allergies",patient.allergies||"None"],
+      ["Medical Conditions",patient.medical_conditions||"None"],
+      ["Emergency Contact",patient.emergency_contact||"—"],
+      ["Contact Number",patient.contact_number||"—"],
+      ["Registered",formatDashboardDate(patient.created_at)]
+    ];
+    $("profileInfo").innerHTML=fields.map(([label,value])=>`<div class="info-item"><span>${esc(label)}</span><b>${esc(value)}</b></div>`).join("");
+
+    const visits=visitsData.visits||[];
+    $("profileVisits").innerHTML=visits.map((visit)=>`<tr><td>${esc(formatDashboardDate(visit.visit_date))}</td><td>${esc(visit.chief_complaint||"—")}</td><td>${esc(visit.medical_assessment||"—")}</td><td>${esc(visit.treatment_given||"—")}</td></tr>`).join("")||'<tr><td colspan="4">No visits recorded.</td></tr>';
+  }catch(error){
+    console.error("Patient profile error:",error);
+    $("profileName").textContent="Unable to load patient";
+    $("profileInfo").innerHTML=`<div class="empty-state">${esc(error.message||"Unable to load patient profile.")}</div>`;
+    $("profileVisits").innerHTML='<tr><td colspan="4">Unable to load visit history.</td></tr>';
+    toast("Unable to load patient profile.");
+  }
 }
 $("editPatientBtn").addEventListener("click",()=>{
   const p=getPatients().find(x=>x.id===selectedPatientId);if(!p)return;go("register");

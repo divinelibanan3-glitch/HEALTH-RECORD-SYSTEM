@@ -20,6 +20,20 @@ const getDashboard = async (req, res) => {
                AND visit_date < CURRENT_DATE() + INTERVAL 1 DAY`
         );
 
+        // Get the four most recently registered patients
+        const [recentPatients] = await db.execute(
+            `SELECT
+                patient_id,
+                student_number,
+                full_name,
+                course,
+                year_level,
+                created_at
+             FROM patients
+             ORDER BY created_at DESC, patient_id DESC
+             LIMIT 4`
+        );
+
         // Get five most recent consultations
         const [recentVisits] = await db.execute(
             `SELECT
@@ -27,7 +41,8 @@ const getDashboard = async (req, res) => {
                 v.visit_date,
                 p.student_number,
                 p.full_name,
-                v.chief_complaint
+                v.checkup_type,
+                v.medical_assessment AS assessment
              FROM clinic_visits v
              JOIN patients p
                 ON v.patient_id = p.patient_id
@@ -42,6 +57,7 @@ const getDashboard = async (req, res) => {
                 total_visits: visitRows[0].total,
                 visits_today: todayRows[0].total
             },
+            recent_patients: recentPatients,
             recent_visits: recentVisits
         });
 
