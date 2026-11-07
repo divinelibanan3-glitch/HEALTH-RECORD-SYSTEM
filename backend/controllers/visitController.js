@@ -1,6 +1,5 @@
 
-const db = require('../db');
-
+const db = require('../db');    
 // Get a patient's clinic visit history
 const getPatientVisits = async (req, res) => {
     try {

@@ -1,6 +1,5 @@
 
 const db = require('../db');
-
 const getDashboard = async (req, res) => {
     try {
         // Count registered patients

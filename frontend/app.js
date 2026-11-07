@@ -1,8 +1,4 @@
-// PLMun Health Portal - Front-end demonstration
-// Demo credentials: admin / admin123
-// Records are stored in this browser only. Use a secure backend for real deployment.
-const DEMO_USERNAME = "admin";
-const DEMO_PASSWORD = "admin123";
+
 const $ = (id) => document.getElementById(id);
 const getPatients = () => JSON.parse(localStorage.getItem("plmun_patients") || "[]");
 const getVisits = () => JSON.parse(localStorage.getItem("plmun_visits") || "[]");
@@ -54,16 +50,134 @@ function go(page){
 document.querySelectorAll("[data-page]").forEach(b=>b.addEventListener("click",()=>go(b.dataset.page)));
 document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>go(b.dataset.go)));
 $("mobileMenu").addEventListener("click",()=>$("sidebar")?.classList.toggle("open"));
-$("loginForm").addEventListener("submit",e=>{e.preventDefault();if($("username").value.trim()===DEMO_USERNAME && $("password").value===DEMO_PASSWORD){$("loginPage").classList.add("hidden");$("app").classList.remove("hidden");$("loginError").textContent="";go("dashboard")}else{$("loginError").textContent="Incorrect username or password."}});
-$("togglePassword").addEventListener("click",()=>{$("password").type=$("password").type==="password"?"text":"password"});
-$("logoutBtn").addEventListener("click",()=>{$("app").classList.add("hidden");$("loginPage").classList.remove("hidden");$("password").value=""});
 
-function renderDashboard(){
-  const patients=getPatients(),visits=getVisits(),today=new Date().toISOString().slice(0,10),month=today.slice(0,7);
-  $("statPatients").textContent=patients.length;$("statToday").textContent=visits.filter(v=>v.date===today).length;$("statVisits").textContent=visits.length;$("statMonth").textContent=patients.filter(p=>(p.createdAt||"").startsWith(month)).length;
-  $("recentPatients").innerHTML=patients.slice(-4).reverse().map(p=>`<div class="recent-row"><div class="initials">${initials(p.fullName)}</div><div class="recent-main"><b>${esc(p.fullName)}</b><small>${esc(p.course)} · ${esc(p.studentNumber)}</small></div><span class="recent-time">Recently added</span><span class="status-pill">New Visit</span></div>`).join("")||'<div class="empty-state">No patient records yet.</div>';
-  $("recentActivity").innerHTML=visits.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,4).map(v=>{const p=patients.find(x=>x.id===v.patientId);return `<div class="activity-row"><i class="activity-icon fa-solid fa-notes-medical"></i><div class="activity-main"><b>${p?esc(p.fullName):"Patient record"}</b><small>${esc(v.type)} · ${esc(v.assessment)}</small></div><span class="activity-time">${formatDate(v.date)}</span></div>`}).join("")||'<div class="empty-state">No clinic activity yet.</div>';
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const email = $("username").value.trim();
+  const password = $("password").value;
+  const loginError = $("loginError");
+  const submitButton = $("loginForm").querySelector('button[type="submit"]');
+
+  loginError.textContent = "";
+  submitButton.disabled = true;
+  submitButton.textContent = "Signing in...";
+
+  try {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      loginError.textContent = data.message || "Login failed.";
+      return;
+    }
+
+    $("loginPage").classList.add("hidden");
+    $("app").classList.remove("hidden");
+    $("password").value = "";
+
+    go("dashboard");
+  } catch (error) {
+    console.error("Login error:", error);
+    loginError.textContent = "Cannot connect to the server.";
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Sign In";
+  }
+});
+
+
+$("logoutBtn").addEventListener("click", async () => {
+  try {
+    const response = await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin"
+    });
+
+    if (!response.ok) {
+      toast("Logout failed. Please try again.");
+      return;
+    }
+
+    $("app").classList.add("hidden");
+    $("loginPage").classList.remove("hidden");
+    $("password").value = "";
+    $("username").value = "";
+    $("loginError").textContent = "";
+  } catch (error) {
+    console.error("Logout error:", error);
+    toast("Cannot connect to the server.");
+  }
+});
+
+
+async function renderDashboard() {
+  try {
+    const response = await fetch("/api/dashboard", {
+      credentials: "same-origin"
+    });
+
+    if (response.status === 401) {
+      $("app").classList.add("hidden");
+      $("loginPage").classList.remove("hidden");
+      $("loginError").textContent = "Please log in again.";
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error("Failed to load dashboard");
+    }
+
+    const data = await response.json();
+    const stats = data.statistics || {};
+
+    $("statPatients").textContent = stats.total_patients ?? 0;
+    $("statToday").textContent = stats.visits_today ?? 0;
+    $("statVisits").textContent = stats.total_visits ?? 0;
+
+    
+    $("statMonth").textContent = "—";
+    
+    const recentPatients = data.recent_patients || [];
+
+    $("recentPatients").innerHTML = recentPatients.length
+      ? recentPatients.map((patient) => {
+          const name = patient.full_name || "Unknown Patient";
+          const studentNumber = patient.student_number || "—";
+          const course = patient.course || "—";
+
+          return `
+            <div class="recent-row">
+              <div class="initials">${esc(initials(name))}</div>
+
+              <div class="recent-main">
+                <b>${esc(name)}</b>
+                <small>${esc(course)} · ${esc(studentNumber)}</small>
+              </div>
+
+              <span class="recent-time">Recently added</span>
+            </div>
+          `;
+        }).join("")
+      : '<div class="empty-state">No recent patients found.</div>';
+
+
+    console.log("Dashboard loaded:", data);
+  } catch (error) {
+    console.error("Dashboard error:", error);
+    toast("Unable to load dashboard data.");
+  }
 }
+
+
 function initials(name){return name.split(/\s+/).slice(0,2).map(x=>x[0]).join("").toUpperCase()}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function formatDate(d){if(!d)return "—";return new Date(d+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}

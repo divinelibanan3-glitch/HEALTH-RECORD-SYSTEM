@@ -99,7 +99,7 @@ const registerPatient = async (req, res) => {
             !full_name.trim()
         ) {
             return res.status(400).json({
-                message: 'A 10-digit student number and full name are required'
+                message: 'A 8-digit student number and full name are required'
             });
         }
 
