@@ -5,8 +5,29 @@ const getPatientByStudentNumber = async (req, res) => {
     try {
         const { studentNumber } = req.params;
 
+        if (!/^\d{8}$/.test(studentNumber)) {
+            return res.status(400).json({
+                message: 'Student number must be exactly 8 numeric digits'
+            });
+        }
+
         const [patients] = await db.execute(
-            'SELECT * FROM patients WHERE student_number = ?',
+            `SELECT
+                patient_id,
+                student_number,
+                full_name,
+                birthdate,
+                sex,
+                course,
+                year_level,
+                blood_type,
+                allergies,
+                medical_conditions,
+                emergency_contact,
+                contact_number,
+                created_at
+             FROM patients
+             WHERE student_number = ?`,
             [studentNumber]
         );
 
@@ -33,21 +54,17 @@ const getPatientByStudentNumber = async (req, res) => {
 
 const searchPatients = async (req, res) => {
     try {
-        const search = req.query.search;
+        const search = typeof req.query.search === 'string'
+            ? req.query.search.trim()
+            : '';
 
-        if (typeof search !== 'string' || !search.trim()) {
-            return res.status(400).json({
-                message: 'Please enter a name or student number'
-            });
-        }
-
-        if (search.trim().length > 50) {
+        if (search.length > 50) {
             return res.status(400).json({
                 message: 'Search must be 50 characters or fewer'
             });
         }
 
-        const searchTerm = `%${search.trim()}%`;
+        const searchTerm = `%${search}%`;
 
         const [patients] = await db.execute(
             `SELECT
@@ -57,11 +74,12 @@ const searchPatients = async (req, res) => {
                 course,
                 year_level
              FROM patients
-             WHERE full_name LIKE ?
+             WHERE ? = ''
+                OR full_name LIKE ?
                 OR student_number LIKE ?
              ORDER BY full_name ASC
              LIMIT 20`,
-            [searchTerm, searchTerm]
+            [search, searchTerm, searchTerm]
         );
 
         res.json({
@@ -88,18 +106,33 @@ const registerPatient = async (req, res) => {
             birthdate,
             sex,
             course,
-            year_level
+            year_level,
+            blood_type,
+            allergies,
+            medical_conditions,
+            emergency_contact,
+            contact_number
         } = req.body;
 
         // Validate required information
         if (
             typeof student_number !== 'string' ||
-            !/^\d{10}$/.test(student_number) ||
+            !/^\d{8}$/.test(student_number) ||
             typeof full_name !== 'string' ||
-            !full_name.trim()
+            !full_name.trim() ||
+            typeof birthdate !== 'string' ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(birthdate) ||
+            typeof sex !== 'string' ||
+            !sex.trim() ||
+            typeof course !== 'string' ||
+            !course.trim() ||
+            typeof year_level !== 'string' ||
+            !year_level.trim() ||
+            typeof blood_type !== 'string' ||
+            !blood_type.trim()
         ) {
             return res.status(400).json({
-                message: 'A 10-digit student number and full name are required'
+                message: 'Complete all required fields and enter exactly 8 numeric digits for the student number'
             });
         }
 
@@ -118,15 +151,38 @@ const registerPatient = async (req, res) => {
         // Insert the new patient
         const [result] = await db.execute(
             `INSERT INTO patients
-             (student_number, full_name, birthdate, sex, course, year_level)
-             VALUES (?, ?, ?, ?, ?, ?)`,
+             (
+                student_number,
+                full_name,
+                birthdate,
+                sex,
+                course,
+                year_level,
+                blood_type,
+                allergies,
+                medical_conditions,
+                emergency_contact,
+                contact_number
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 student_number,
                 full_name.trim(),
-                birthdate || null,
-                sex || null,
-                course || null,
-                year_level || null
+                birthdate,
+                sex.trim(),
+                course.trim(),
+                year_level.trim(),
+                blood_type.trim(),
+                typeof allergies === 'string' && allergies.trim() ? allergies.trim() : null,
+                typeof medical_conditions === 'string' && medical_conditions.trim()
+                    ? medical_conditions.trim()
+                    : null,
+                typeof emergency_contact === 'string' && emergency_contact.trim()
+                    ? emergency_contact.trim()
+                    : null,
+                typeof contact_number === 'string' && contact_number.trim()
+                    ? contact_number.trim()
+                    : null
             ]
         );
 
