@@ -1,26 +1,25 @@
 
 const express = require('express');
-require('dotenv').config({
-  path: require('path').join(__dirname, '../.env')
-});
-const path = require('path');
+const cors = require('cors');
+
+const visitRoutes = require('./routes/visitRoutes');
 const patientRoutes = require('./routes/patientRoutes');
 const visitRoutes = require('./routes/visitRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
-const authRoutes = require('./routes/authRoutes');
-const session = require('express-session');
-const { requireAuth } = require('./middleware/authMiddleware');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Middleware
+app.use(cors());
 app.use(express.json());
 
-app.use(express.static(
-  path.join(__dirname, '../frontend'),
-  { index: false }
-));
+app.get('/', (req, res) => {
+    res.json({ message: 'PLMun Health Portal API is running!' });
+});
+
+app.use('/api/patients', visitRoutes);
+app.use('/api/patients', patientRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.use(session({
   name: 'plmun.sid',
