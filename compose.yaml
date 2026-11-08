@@ -26,6 +26,10 @@ services:
       DB_USER: root
       DB_NAME: plmun_clinic
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./frontend:/frontend:ro
+      - ./backend:/app
+      - /app/node_modules
     depends_on:
       - mysql
 
