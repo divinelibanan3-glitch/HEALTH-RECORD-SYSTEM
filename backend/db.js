@@ -6,11 +6,11 @@ require('dotenv').config({
 });
 
 const db = mysql.createPool({
-    host: '127.0.0.1',
-    port: 3307,
-    user: 'root',
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: Number(process.env.DB_PORT) || 3307,
+    user: process.env.DB_USER || 'root',
     password: process.env.MYSQL_ROOT_PASSWORD,
-    database: 'plmun_clinic',
+    database: process.env.DB_NAME || 'plmun_clinic',
     waitForConnections: true,
     connectionLimit: 10
 });
