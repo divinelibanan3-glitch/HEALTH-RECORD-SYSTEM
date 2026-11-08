@@ -11,7 +11,6 @@ const authRoutes = require('./routes/authRoutes');
 const session = require('express-session');
 const { requireAuth } = require('./middleware/authMiddleware');
 
-
 const app = express();
 const PORT = 3000;
 
@@ -34,16 +33,11 @@ app.use(session({
     secure: process.env.NODE_ENV === 'production',
     maxAge: 1000 * 60 * 60 * 8
   }
-  
 }));
-
-
-// API routes
 
 app.use('/api/patients', requireAuth, visitRoutes);
 app.use('/api/patients', requireAuth, patientRoutes);
 app.use('/api/dashboard', requireAuth, dashboardRoutes);
-
 app.use('/api/auth', authRoutes);
 
 app.get('/', (req, res) => {
