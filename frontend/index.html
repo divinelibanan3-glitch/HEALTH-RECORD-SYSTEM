@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,6 +11,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <style>
+    /* Pansamantalang itago ang mga dobleng heading sa loob ng mga pahina dahil meron na sa top bar */
+    .page-heading h2,
+    .page-heading i {
+      display: none !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -45,26 +53,13 @@
 
         <label class="login-input">
           <i class="fa-solid fa-envelope"></i>
-          <input
-            id="username"
-            name="email"
-            type="email"
-            placeholder="Staff Email"
-            autocomplete="username"
-            required
-          >
+          <input id="username" name="email" type="email" placeholder="Staff Email" autocomplete="username" required>
         </label>
 
         <label class="login-input">
           <i class="fa-solid fa-lock"></i>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="Password"
-            autocomplete="current-password"
-            required
-          >
+          <input id="password" name="password" type="password" placeholder="Password" autocomplete="current-password"
+            required>
           <button type="button" class="eye-btn" id="togglePassword" aria-label="Show or hide password">
             <i class="fa-regular fa-eye"></i>
           </button>
@@ -221,12 +216,11 @@
 
       <!-- PATIENT RECORDS -->
       <section id="patientsPage" class="page hidden">
-        <div class="page-heading">
+        <div class="page-heading" style="justify-content: flex-end;">
           <div>
             <i class="fa-solid fa-users"></i>
             <h2>Patient Records</h2>
           </div>
-
           <button class="primary-btn" data-go="register">
             <i class="fa-solid fa-plus"></i> Add New Patient
           </button>
@@ -235,12 +229,8 @@
         <article class="panel table-panel">
           <div class="search-wrap">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input
-              id="patientSearch"
-              type="search"
-              maxlength="50"
-              placeholder="Search by Student Name or Student Number..."
-            >
+            <input id="patientSearch" type="search" maxlength="50"
+              placeholder="Search by Student Name or Student Number...">
           </div>
 
           <div class="table-scroll">
@@ -303,17 +293,8 @@
           <div class="form-grid three">
             <label>
               Student Number <b>*</b>
-              <input
-                id="studentNumber"
-                type="text"
-                inputmode="numeric"
-                minlength="8"
-                maxlength="8"
-                pattern="[0-9]{8}"
-                title="Enter exactly 8 digits, e.g. 24123456"
-                placeholder="e.g. 24123456"
-                required
-              >
+              <input id="studentNumber" type="text" inputmode="numeric" minlength="8" maxlength="8" pattern="[0-9]{8}"
+                title="Enter exactly 8 digits, e.g. 24123456" placeholder="e.g. 24123456" required>
             </label>
 
             <label>
@@ -461,7 +442,6 @@
             <i class="fa-solid fa-clipboard-list"></i>
             <h2>Clinic Visit History</h2>
           </div>
-
           <button class="primary-btn" data-go="addVisit">
             <i class="fa-solid fa-plus"></i> Add New Clinic Visit
           </button>
@@ -643,4 +623,5 @@
 
   <script src="app.js?v=20261107-student-number-format"></script>
 </body>
+
 </html>

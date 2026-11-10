@@ -20,8 +20,8 @@ const loginStaff = async (req, res) => {
     // Default admin login credentials
     if (
       (cleanEmail === 'admin' ||
-       cleanEmail === 'admin@example.test' ||
-       cleanEmail === 'admin@plmun.edu.ph') &&
+        cleanEmail === 'admin@example.test' ||
+        cleanEmail === 'admin@plmun.edu.ph') &&
       password === 'admin123'
     ) {
       req.session.staff = {
